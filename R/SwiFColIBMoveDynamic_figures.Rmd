@@ -1,0 +1,860 @@
+---
+title: "SwiFCoIBMoveDynamic: Figures"
+author: "Tobias Kuerschner"
+date: "2 December 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Preparation
+
+## Setup
+```{r Setupp, echo=FALSE, include=FALSE}
+
+#sourcefile with required packages
+
+source("src/source_lib.r")
+currentDate_v <- gsub("-","",Sys.Date())
+
+```
+
+
+```{r data preparation}
+
+RLS_l.labs <- c("CRW\n Large clusters", "CRW\n Medium clusters","CRW\n Small clusters", "CRW\n Random landscape","HDM\n Large clusters","HDM\n Medium clusters","HDM\n Small clusters","HDM\n Random landscape","No roaming\n Random landscape","No roaming\n Small clusters","No roaming\n Medium clusters","No roaming\n Large clusters")
+names(RLS_l.labs) <- c("CRW_patch_l_1", "CRW_patch_m_1","CRW_patch_s_1","CRW_rand_2","HD-CRW_patch_l_1","HD-CRW_patch_m_1","HD-CRW_patch_s_1","HD-CRW_rand_2","OFF_rand_2","OFF_patch_s_1","OFF_patch_m_1","OFF_patch_l_1")
+
+
+```
+
+```{r data preparation coexistence probability and survival time, echo=FALSE, include=FALSE, eval=FALSE} 
+
+#Add run summary from model output as csv file before running
+#Note: Due to the size of the model output data (up to several hundret GB) the use of a hpc is recomended. For ease of acess the subseted summaries used in the publication are provided in the /input folder
+
+l_dyn_1_inf_legthb<-read.csv(file="Input/run_summary.csv",header=TRUE, sep=",",skip = 6)
+
+l_dyn_alpha_edit_lenght_eb<- ddply((l_dyn_1_inf_legthb), c("dynmode","noise_type","Roaming","uniform_breeding","X.run.number.","survival_weeks","climate_change_factor","Filename"), summarise,
+               N    = sum(!is.na((WeekLast))),
+               mean_t = mean((WeekLast), na.rm=TRUE),
+               sd   = sd((WeekLast), na.rm=TRUE),
+               se   = sd / sqrt(N)
+)
+
+
+l_dyn_alpha_edit_lenght_eb<-subset(l_dyn_alpha_edit_lenght_eb,l_dyn_alpha_edit_lenght_eb$dynmode == 'true')
+
+l_dyn_alpha_edit_lenght_eb<-mutate(l_dyn_alpha_edit_lenght_eb, breeding_type= case_when(l_dyn_alpha_edit_lenght_eb$uniform_breeding == "true" ~ "Uniform breeding", l_dyn_alpha_edit_lenght_eb$uniform_breeding  == "false"   ~ "Classic breeding" ))
+
+l_dyn_alpha_edit_lenght_eb<-mutate(l_dyn_alpha_edit_lenght_eb, survived= case_when(l_dyn_alpha_edit_lenght_eb$N >= 2601 ~ TRUE,l_dyn_alpha_edit_lenght_eb$N < 2601 ~FALSE  ))
+
+
+ng_sub_1_CRW<-subset(l_dyn_alpha_edit_lenght_eb, l_dyn_alpha_edit_lenght_eb$survival_weeks == 10)
+
+ng_sub_1_AC<-subset(ng_sub_1_CRW, ng_sub_1_CRW$noise_type == "Red Noise")
+
+ng_sub_1_AC_uni<-ng_sub_1_AC %>% unite("RLS", Roaming,Filename, sep = "_", remove = TRUE, na.rm = FALSE)
+
+ng_sub_1_AC_uni_grp<-ng_sub_1_AC_uni %>% group_by(RLS, climate_change_factor)
+
+ng_sub_1_AC_uni_grp_survived<-subset(ng_sub_1_AC_uni_grp, ng_sub_1_AC_uni_grp$survived == TRUE)
+
+ng_sub_1_AC_uni_grp_extinct<-subset(ng_sub_1_AC_uni_grp, ng_sub_1_AC_uni_grp$survived == FALSE)
+
+ng_sub_1_AC_uni_grp_survived_sum <- ng_sub_1_AC_uni_grp_survived %>% summarise(
+  
+  mean_t_survived = mean((N), na.rm=TRUE),
+  N_survived = sum(!is.na((N)))
+  
+)
+
+ng_sub_1_CRW_AC_uni_grp_extinct_sum <- ng_sub_1_CRW_AC_uni_grp_extinct %>% summarise(
+  
+  mean_t_extinct = mean((N), na.rm=TRUE),
+  sd_ext   = mean(sd),
+  se_ext  = mean(se),
+  N_extinct = sum(!is.na((N)))
+  
+)
+
+ng_sub_1_AC_uni_grp_joint<-full_join(ng_sub_1_AC_uni_grp_survived_sum,ng_sub_1_AC_uni_grp_extinct_sum)
+
+ng_sub_1_AC_uni_grp_joint$N_extinct <- replace_na(ng_sub_1_AC_uni_grp_joint$N_extinct,0)
+
+ng_sub_1_AC_uni_grp_joint$N_survived <- replace_na(ng_sub_1_AC_uni_grp_joint$N_survived,0)
+
+ng_sub_1_AC_uni_grp_joint$extinction_ratio<-ng_sub_1_AC_uni_grp_joint$N_extinct /25
+
+ext_t_Sub<-subset(ng_sub_1_AC_uni_grp_joint, ng_sub_1_AC_uni_grp_joint$climate_change_factor != 101)
+
+ng_sub_1_AC_uni_grp_joint$sd_ext <- NULL
+ng_sub_1_AC_uni_grp_joint$se_ext <- NULL
+
+##Uncomment the write commands
+
+#write.csv(ng_sub_1_AC_uni_grp_joint,"Input/CoexistenceSubset.csv", row.names = FALSE)
+
+#write.csv(ext_t_Sub,"Input/ExtinctionSubset.csv", row.names = FALSE)
+
+
+```
+
+
+
+```{r data preparation for heatmaps and frequency plots , echo=FALSE}
+
+#Heatmaps
+
+#No roaming movment
+nr_0_HM<-scan(file="Input/Heatmaps/nr_heatmap_0.csv", sep=",",what = "")
+nr_25_HM<-scan(file="Input/Heatmaps/nr_heatmap_25.csv", sep=",",what = "")
+nr_50_HM<-scan(file="Input/Heatmaps/nr_heatmap_50.csv", sep=",",what = "")
+nr_75_HM<-scan(file="Input/Heatmaps/nr_heatmap_75.csv", sep=",",what = "")
+nr_100_HM<-scan(file="Input/Heatmaps/nr_heatmap_100.csv", sep=",",what = "")
+
+#Correlated random walk
+
+crw_0_HM<-scan(file="Input/Heatmaps/crw_heatmap_0.csv", sep=",",what = "")
+crw_25_HM<-scan(file="Input/Heatmaps/crw_heatmap_25.csv", sep=",",what = "")
+crw_50_HM<-scan(file="Input/Heatmaps/crw_heatmap_50.csv", sep=",",what = "")
+crw_75_HM<-scan(file="Input/Heatmaps/crw_heatmap_75.csv", sep=",",what = "")
+crw_100_HM<-scan(file="Input/Heatmaps/crw_heatmap_100.csv", sep=",",what = "")
+
+#Habitat movment
+
+hdcrw_0_HM<-scan(file="Input/Heatmaps/hdcrw_heatmap_0.csv", sep=",",what = "")
+hdcrw_25_HM<-scan(file="Input/Heatmaps/hdcrw_heatmap_25.csv", sep=",",what = "")
+hdcrw_50_HM<-scan(file="Input/Heatmaps/hdcrw_heatmap_50.csv", sep=",",what = "")
+hdcrw_75_HM<-scan(file="Input/Heatmaps/hdcrw_heatmap_75.csv", sep=",",what = "")
+hdcrw_100_HM<-scan(file="Input/Heatmaps/hdcrw_heatmap_100.csv", sep=",",what = "")
+
+
+
+
+#Data preparation
+
+ve1<-c("xcord", "ycord", "inf", "hab")
+
+#No roaming movment
+
+t5_nr_n<-(str_split_fixed(nr_0_HM, ";", 4))
+colnames(t5_nr_n)<-ve1
+t5_df_nr_n<-as.data.frame(t5_nr_n)
+colnames(t5_df_nr_n)<-ve1
+t5_df_nr_n$xcord<-as.numeric(as.character (t5_df_nr_n$xcord))
+t5_df_nr_n$ycord<-as.numeric(as.character(t5_df_nr_n$ycord))
+t5_df_nr_n$inf<-as.numeric(as.character(t5_df_nr_n$inf)) 
+t5_df_nr_n$hab<-as.numeric(as.character(t5_df_nr_n$hab))  
+t6_nr_n<-t5_df_nr_n
+t6_nr_n$inf<-na_if(t5_df_nr_n$inf, 0)
+
+t5_nr_25<-(str_split_fixed(nr_25_HM, ";", 4))
+colnames(t5_nr_25)<-ve1
+t5_df_nr_25<-as.data.frame(t5_nr_25)
+colnames(t5_df_nr_25)<-ve1
+t5_df_nr_25$xcord<-as.numeric(as.character (t5_df_nr_25$xcord))
+t5_df_nr_25$ycord<-as.numeric(as.character(t5_df_nr_25$ycord))
+t5_df_nr_25$inf<-as.numeric(as.character(t5_df_nr_25$inf)) 
+t5_df_nr_25$hab<-as.numeric(as.character(t5_df_nr_25$hab))  
+t6_nr_25<-t5_df_nr_25
+t6_nr_25$inf<-na_if(t5_df_nr_25$inf, 0)
+
+t5_nr_50<-(str_split_fixed(nr_50_HM, ";", 4))
+colnames(t5_nr_50)<-ve1
+t5_df_nr_50<-as.data.frame(t5_nr_50)
+colnames(t5_df_nr_50)<-ve1
+t5_df_nr_50$xcord<-as.numeric(as.character (t5_df_nr_50$xcord))
+t5_df_nr_50$ycord<-as.numeric(as.character(t5_df_nr_50$ycord))
+t5_df_nr_50$inf<-as.numeric(as.character(t5_df_nr_50$inf)) 
+t5_df_nr_50$hab<-as.numeric(as.character(t5_df_nr_50$hab))  
+t6_nr_50<-t5_df_nr_50
+t6_nr_50$inf<-na_if(t5_df_nr_50$inf, 0)
+
+t5_nr_75<-(str_split_fixed(nr_75_HM, ";", 4))
+colnames(t5_nr_75)<-ve1
+t5_df_nr_75<-as.data.frame(t5_nr_75)
+colnames(t5_df_nr_75)<-ve1
+t5_df_nr_75$xcord<-as.numeric(as.character (t5_df_nr_75$xcord))
+t5_df_nr_75$ycord<-as.numeric(as.character(t5_df_nr_75$ycord))
+t5_df_nr_75$inf<-as.numeric(as.character(t5_df_nr_75$inf)) 
+t5_df_nr_75$hab<-as.numeric(as.character(t5_df_nr_75$hab))  
+t6_nr_75<-t5_df_nr_75
+t6_nr_75$inf<-na_if(t5_df_nr_75$inf, 0)
+
+t5_nr_100<-(str_split_fixed(nr_100_HM, ";", 4))
+colnames(t5_nr_100)<-ve1
+t5_df_nr_100<-as.data.frame(t5_nr_100)
+colnames(t5_df_nr_100)<-ve1
+t5_df_nr_100$xcord<-as.numeric(as.character (t5_df_nr_100$xcord))
+t5_df_nr_100$ycord<-as.numeric(as.character(t5_df_nr_100$ycord))
+t5_df_nr_100$inf<-as.numeric(as.character(t5_df_nr_100$inf)) 
+t5_df_nr_100$hab<-as.numeric(as.character(t5_df_nr_100$hab))  
+t6_nr_100<-t5_df_nr_100
+t6_nr_100$inf<-na_if(t5_df_nr_100$inf, 0)
+
+#CRW
+
+t5_crw_n<-(str_split_fixed(crw_0_HM, ";", 4))
+colnames(t5_crw_n)<-ve1
+t5_df_crw_n<-as.data.frame(t5_crw_n)
+colnames(t5_df_crw_n)<-ve1
+t5_df_crw_n$xcord<-as.numeric(as.character (t5_df_crw_n$xcord))
+t5_df_crw_n$ycord<-as.numeric(as.character(t5_df_crw_n$ycord))
+t5_df_crw_n$inf<-as.numeric(as.character(t5_df_crw_n$inf)) 
+t5_df_crw_n$hab<-as.numeric(as.character(t5_df_crw_n$hab))  
+t6_crw_n<-t5_df_crw_n
+t6_crw_n$inf<-na_if(t5_df_crw_n$inf, 0)
+
+t5_crw_25<-(str_split_fixed(crw_25_HM, ";", 4))
+colnames(t5_crw_25)<-ve1
+t5_df_crw_25<-as.data.frame(t5_crw_25)
+colnames(t5_df_crw_25)<-ve1
+t5_df_crw_25$xcord<-as.numeric(as.character (t5_df_crw_25$xcord))
+t5_df_crw_25$ycord<-as.numeric(as.character(t5_df_crw_25$ycord))
+t5_df_crw_25$inf<-as.numeric(as.character(t5_df_crw_25$inf)) 
+t5_df_crw_25$hab<-as.numeric(as.character(t5_df_crw_25$hab))  
+t6_crw_25<-t5_df_crw_25
+t6_crw_25$inf<-na_if(t5_df_crw_25$inf, 0)
+
+t5_crw_50<-(str_split_fixed(crw_50_HM, ";", 4))
+colnames(t5_crw_50)<-ve1
+t5_df_crw_50<-as.data.frame(t5_crw_50)
+colnames(t5_df_crw_50)<-ve1
+t5_df_crw_50$xcord<-as.numeric(as.character(t5_df_crw_50$xcord))
+t5_df_crw_50$ycord<-as.numeric(as.character(t5_df_crw_50$ycord))
+t5_df_crw_50$inf<-as.numeric(as.character(t5_df_crw_50$inf)) 
+t5_df_crw_50$hab<-as.numeric(as.character(t5_df_crw_50$hab))  
+t6_crw_50<-t5_df_crw_50
+t6_crw_50$inf<-na_if(t5_df_crw_50$inf, 0)
+
+t5_crw_75<-(str_split_fixed(crw_75_HM, ";", 4))
+colnames(t5_crw_75)<-ve1
+t5_df_crw_75<-as.data.frame(t5_crw_75)
+colnames(t5_df_crw_75)<-ve1
+t5_df_crw_75$xcord<-as.numeric(as.character (t5_df_crw_75$xcord))
+t5_df_crw_75$ycord<-as.numeric(as.character(t5_df_crw_75$ycord))
+t5_df_crw_75$inf<-as.numeric(as.character(t5_df_crw_75$inf)) 
+t5_df_crw_75$hab<-as.numeric(as.character(t5_df_crw_75$hab))  
+t6_crw_75<-t5_df_crw_75
+t6_crw_75$inf<-na_if(t5_df_crw_75$inf, 0)
+
+t5_crw_100<-(str_split_fixed(crw_100_HM, ";", 4))
+colnames(t5_crw_100)<-ve1
+t5_df_crw_100<-as.data.frame(t5_crw_100)
+colnames(t5_df_crw_100)<-ve1
+t5_df_crw_100$xcord<-as.numeric(as.character (t5_df_crw_100$xcord))
+t5_df_crw_100$ycord<-as.numeric(as.character(t5_df_crw_100$ycord))
+t5_df_crw_100$inf<-as.numeric(as.character(t5_df_crw_100$inf)) 
+t5_df_crw_100$hab<-as.numeric(as.character(t5_df_crw_100$hab))  
+t6_crw_100<-t5_df_crw_100
+t6_crw_100$inf<-na_if(t5_df_crw_100$inf, 0)
+
+
+#HDM
+
+t5_hd_crw_n<-(str_split_fixed(hdcrw_0_HM, ";", 4))
+colnames(t5_hd_crw_n)<-ve1
+t5_df_hd_crw_n<-as.data.frame(t5_hd_crw_n)
+colnames(t5_df_hd_crw_n)<-ve1
+t5_df_hd_crw_n$xcord<-as.numeric(as.character (t5_df_hd_crw_n$xcord))
+t5_df_hd_crw_n$ycord<-as.numeric(as.character(t5_df_hd_crw_n$ycord))
+t5_df_hd_crw_n$inf<-as.numeric(as.character(t5_df_hd_crw_n$inf)) 
+t5_df_hd_crw_n$hab<-as.numeric(as.character(t5_df_hd_crw_n$hab))  
+t6_hd_crw_n<-t5_df_hd_crw_n
+t6_hd_crw_n$inf<-na_if(t5_df_hd_crw_n$inf, 0)
+
+t5_hd_crw_25<-(str_split_fixed(hdcrw_25_HM, ";", 4))
+colnames(t5_hd_crw_25)<-ve1
+t5_df_hd_crw_25<-as.data.frame(t5_hd_crw_25)
+colnames(t5_df_hd_crw_25)<-ve1
+t5_df_hd_crw_25$xcord<-as.numeric(as.character (t5_df_hd_crw_25$xcord))
+t5_df_hd_crw_25$ycord<-as.numeric(as.character(t5_df_hd_crw_25$ycord))
+t5_df_hd_crw_25$inf<-as.numeric(as.character(t5_df_hd_crw_25$inf)) 
+t5_df_hd_crw_25$hab<-as.numeric(as.character(t5_df_hd_crw_25$hab))  
+t6_hd_crw_25<-t5_df_hd_crw_25
+t6_hd_crw_25$inf<-na_if(t5_df_hd_crw_25$inf, 0)
+
+t5_hd_crw_50<-(str_split_fixed(hdcrw_50_HM, ";", 4))
+colnames(t5_hd_crw_50)<-ve1
+t5_df_hd_crw_50<-as.data.frame(t5_hd_crw_50)
+colnames(t5_df_hd_crw_50)<-ve1
+t5_df_hd_crw_50$xcord<-as.numeric(as.character (t5_df_hd_crw_50$xcord))
+t5_df_hd_crw_50$ycord<-as.numeric(as.character(t5_df_hd_crw_50$ycord))
+t5_df_hd_crw_50$inf<-as.numeric(as.character(t5_df_hd_crw_50$inf)) 
+t5_df_hd_crw_50$hab<-as.numeric(as.character(t5_df_hd_crw_50$hab))  
+t6_hd_crw_50<-t5_df_hd_crw_50
+t6_hd_crw_50$inf<-na_if(t5_df_hd_crw_50$inf, 0)
+
+t5_hd_crw_75<-(str_split_fixed(hdcrw_75_HM, ";", 4))
+colnames(t5_hd_crw_75)<-ve1
+t5_df_hd_crw_75<-as.data.frame(t5_hd_crw_75)
+colnames(t5_df_hd_crw_75)<-ve1
+t5_df_hd_crw_75$xcord<-as.numeric(as.character (t5_df_hd_crw_75$xcord))
+t5_df_hd_crw_75$ycord<-as.numeric(as.character(t5_df_hd_crw_75$ycord))
+t5_df_hd_crw_75$inf<-as.numeric(as.character(t5_df_hd_crw_75$inf)) 
+t5_df_hd_crw_75$hab<-as.numeric(as.character(t5_df_hd_crw_75$hab))  
+t6_hd_crw_75<-t5_df_hd_crw_75
+t6_hd_crw_75$inf<-na_if(t5_df_hd_crw_75$inf, 0)
+
+t5_hd_crw_100<-(str_split_fixed(hdcrw_100_HM, ";", 4))
+colnames(t5_hd_crw_100)<-ve1
+t5_df_hd_crw_100<-as.data.frame(t5_hd_crw_100)
+colnames(t5_df_hd_crw_100)<-ve1
+t5_df_hd_crw_100$xcord<-as.numeric(as.character (t5_df_hd_crw_100$xcord))
+t5_df_hd_crw_100$ycord<-as.numeric(as.character(t5_df_hd_crw_100$ycord))
+t5_df_hd_crw_100$inf<-as.numeric(as.character(t5_df_hd_crw_100$inf)) 
+t5_df_hd_crw_100$hab<-as.numeric(as.character(t5_df_hd_crw_100$hab))  
+t6_hd_crw_100<-t5_df_hd_crw_100
+t6_hd_crw_100$inf<-na_if(t5_df_hd_crw_100$inf, 0)
+
+
+```
+
+
+#Plots
+
+## Fig 2: Coexistence probability
+
+```{r Figure 2, echo=FALSE}
+
+#Temporal shift 101 = random dynamic
+coexProbSubset<-read.csv(file="Input/CoexistenceSubset.csv",header=TRUE, sep=",")
+
+
+(coexistenceProbablility<-ggplot
+    (
+      data = (coexProbSubset), 
+      aes
+      (
+        as.factor(climate_change_factor),
+        as.factor(RLS)
+      )
+    )+
+    geom_tile
+    (
+      aes
+      (
+        fill = ((1-extinction_ratio)*100)
+      ),
+    colour = "black",
+    size = .5
+      
+    )+
+    
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico
+      (
+       palette = 'roma',
+       direction = 1, 
+       name = "Coexistence \nprobability [%]", 
+       limits = c(0,100)
+      )+
+    ggtitle("")+
+    labs(x = expression("Temporal shift (t"['lag']*") [%] "), y="")+
+    theme
+      (
+       axis.text=element_text(size=12),
+       axis.title=element_text(size=14),
+       legend.text=element_text(size=12),
+       legend.title=element_text(size=14),
+       panel.grid.major = element_blank(),
+       panel.grid.minor = element_blank(),
+       panel.border = element_blank(),
+       panel.background = element_blank()
+      )+
+    scale_y_discrete(labels=RLS_l.labs, limits =rev(levels(as.factor(coexProbSubset$RLS))))
+)
+
+
+coexistenceProbablility_FileName <- paste("Output/coexistenceProbablility",currentDate_v,".png",sep="")
+
+ggsave(coexistenceProbablility_FileName, plot = coexistenceProbablility, dpi = 1200, limitsize = TRUE)
+
+
+
+```
+
+
+## Fig 3: Extinction times
+
+```{r Figure 3, echo=FALSE}
+
+extinctionTimeSubset<-read.csv(file="Input/ExtinctionSubset.csv",header=TRUE, sep=",")
+
+extinctionTimeSubset$roaming <- NULL
+
+write.csv(extinctionTimeSubset,"Input/ExtinctionSubset2.csv", row.names = FALSE)
+
+
+(
+  extinctionTimes<- 
+    ggplot
+    (
+    data=extinctionTimeSubset,
+    aes(y=log(mean_t_extinct),x=((climate_change_factor))) 
+    )+
+    geom_line()+
+    geom_point
+    (
+      aes(
+          size = N_extinct, 
+          color = N_extinct
+          )
+    )+
+    scale_size_continuous
+    (
+      limits=c(0, 21),
+      breaks=c(1,3,6,9,12,15,18,21)
+    )+
+    scale_color_continuous
+    (
+      limits=c(0, 21), 
+      breaks=c(1,3,6,9,12,15,18,21)
+    )+
+    guides
+    (
+      color = guide_legend(), 
+      size = guide_legend()
+    )+
+    facet_wrap
+    (
+      ~RLS, labeller = labeller(RLS = RLS_l.labs)
+    )+
+    theme_bw()+
+    labs
+      (
+      x = expression("Temporal shift (t"['lag']*") [%] "),
+      y= expression("log mean time to extinction " * " (t"['ext']*")"),
+      size = " Number of\n extinct runs",
+      color = " Number of\n extinct runs"
+      )+
+    theme
+      (
+        axis.text=element_text(size=15),
+        axis.title=element_text(size=25),
+        legend.text=element_text(size=25),
+        legend.title= element_text(size=25),
+        strip.text = element_text(size = 15),
+        axis.title.y.right = element_text(vjust = 1)
+      )+
+    geom_label((aes(label = abs(round (log(sd_ext), digits =2)  ) )), color="black", alpha = .5, vjust= -.5, label.size=0)+
+    scale_y_continuous( breaks =c(5,6,7,8),  limits =c(4,9), sec.axis = ggplot2::sec_axis(trans=~(exp(.)/52), name="Mean time to extinction (years)", breaks = c(1,2,3,5,10,20,50)))+
+    scale_x_continuous(breaks = c(0,25,50,75,100), limits = c(-10,110))
+    
+  )
+
+extinctionTimes_FileName <- paste("Output/extinctionTimes",currentDate_v,".eps",sep="")
+
+ggsave(extinctionTimes_FileName, plot = extinctionTimes, dpi = 900, limitsize = TRUE,width = 15, height = 10)
+
+
+
+```
+
+## Fig 5: Frequency plots
+```{r Figure 5, echo=FALSE, warning=FALSE}
+#Frequency plots 
+
+crwld1<-ggplot()+geom_freqpoly(data = t5_df_crw_n,aes  (x=t5_df_crw_n$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+crwld2<-ggplot()+geom_freqpoly(data = t5_df_crw_25,aes  (x=t5_df_crw_25$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+crwld3<-ggplot()+geom_freqpoly(data = t5_df_crw_50,aes  (x=t5_df_crw_50$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+crwld4<-ggplot()+geom_freqpoly(data = t5_df_crw_75,aes  (x=t5_df_crw_75$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+crwld5<-ggplot()+geom_freqpoly(data = t5_df_crw_100,aes  (x=t5_df_crw_100$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+
+
+fp_crw<-ggplot()+
+  theme_bw()+
+  geom_path(aes  (layer_data(crwld1)$x/52  , y =layer_data(crwld1)$count), color = "#440154FF", size =1)+
+  geom_path(aes  (layer_data(crwld3)$x/52  , y =layer_data(crwld3)$count), color = "#3B528BFF",size = 1)+
+  geom_path(aes  (layer_data(crwld5)$x/52  , y =layer_data(crwld5)$count), color = "#21908CFF", size = 1)+
+  geom_path(aes  (layer_data(crwld2)$x/52  , y =layer_data(crwld2)$count), color = "#5DC863FF",size = 1)+
+  geom_path(aes  (layer_data(crwld4)$x/52  , y =layer_data(crwld4)$count), color = "#FDE725FF",size = 1)+
+  geom_point(aes  (layer_data(crwld1)$x/52  , y =layer_data(crwld1)$count), color = "#440154FF", size = 2.5, shape = 17)+
+  geom_point(aes  (layer_data(crwld3)$x/52  , y =layer_data(crwld3)$count), color = "#3B528BFF",size = 2.5, shape = 18)+
+  geom_point(aes  (layer_data(crwld5)$x/52  , y =layer_data(crwld5)$count), color = "#21908CFF", size = 2.5, shape = 15)+
+  geom_point(aes  (layer_data(crwld2)$x/52  , y =layer_data(crwld2)$count), color = "#5DC863FF",size = 2.5, shape = 25, fill = "#5DC863FF")+
+  geom_point(aes  (layer_data(crwld4)$x/52  , y =layer_data(crwld4)$count), color = "#FDE725FF",size = 2.5, shape = 16)+
+  scale_x_continuous(breaks =c(0,5,10,15,20,25,30,35),   limits =c(0,35))+
+  scale_y_continuous( limits =c(0,1000))+
+  labs(x = "Cumulative pathogen presence time per cell (years)", y="Frequency (cells)")+
+  ggtitle("(a) CRW")+
+  theme(axis.title.x=element_text(size=30),
+          axis.text.x=element_text(size=30),
+          plot.title = element_text(size = 30),
+          axis.title.y=element_text(size=30),
+          axis.text.y=element_text(size=30),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank()
+          
+  )
+
+hdcrwld1<-ggplot()+geom_freqpoly(data = t5_df_hd_crw_n,aes  (x=t5_df_hd_crw_n$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+hdcrwld2<-ggplot()+geom_freqpoly(data = t5_df_hd_crw_25,aes  (x=t5_df_hd_crw_25$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+hdcrwld3<-ggplot()+geom_freqpoly(data = t5_df_hd_crw_50,aes  (x=t5_df_hd_crw_50$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+hdcrwld4<-ggplot()+geom_freqpoly(data = t5_df_hd_crw_75,aes  (x=t5_df_hd_crw_75$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+hdcrwld5<-ggplot()+geom_freqpoly(data = t5_df_hd_crw_100,aes  (x=t5_df_hd_crw_100$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+
+large_points <- function(data, params, size) {
+  # Multiply by some number for size increase
+  data$size <- data$size * 2
+  draw_key_point(data = data, params = params, size = size)
+}
+
+cols<- c("tlag 0" = "#440154FF", "tlag 25" = "#5DC863FF" ,"tlag 50" = "#3B528BFF" , "tlag 75" = "#FDE725FF", "tlag 100" = "#21908CFF")
+shps<- c("tlag 0" = 17, "tlag 25" = 25 ,"tlag 50" = 18 , "tlag 75" = 16, "tlag 100" = 15)
+brk<-  c("tlag 0","tlag 25","tlag 50","tlag 75","tlag 100")
+lab<- c(expression("t"['lag']*" 0% "), expression("t"['lag']*" 25% "), expression("t"['lag']*" 50% "), expression("t"['lag']*" 75% "), expression("t"['lag']*" 100% "))
+
+fp_hdm<-ggplot()+
+  theme_bw()+
+  geom_path(aes  (layer_data(hdcrwld1)$x /52 , y =layer_data(hdcrwld1)$count, color = "tlag 0"), size =1)+
+  geom_path(aes  (layer_data(hdcrwld2)$x /52 , y =layer_data(hdcrwld2)$count, color = "tlag 25"),size = 1)+
+  geom_path(aes  (layer_data(hdcrwld3)$x /52 , y =layer_data(hdcrwld3)$count, color = "tlag 50"),size = 1)+
+  geom_path(aes  (layer_data(hdcrwld4)$x /52 , y =layer_data(hdcrwld4)$count, color = "tlag 75"),size = 1)+
+  geom_path(aes  (layer_data(hdcrwld5)$x /52 , y =layer_data(hdcrwld5)$count, color = "tlag 100"), size = 1)+
+  geom_point(aes  (layer_data(hdcrwld1)$x /52 , y =layer_data(hdcrwld1)$count, color = "tlag 0", shape = "tlag 0"), size = 2.5,key_glyph = large_points)+
+  geom_point(aes  (layer_data(hdcrwld2)$x /52 , y =layer_data(hdcrwld2)$count, color = "tlag 25", shape = "tlag 25"),size = 2.5, fill ="#5DC863FF",key_glyph = large_points)+
+  geom_point(aes  (layer_data(hdcrwld3)$x /52  , y =layer_data(hdcrwld3)$count, color = "tlag 50", shape = "tlag 50"),size = 2.5)+
+  geom_point(aes  (layer_data(hdcrwld4)$x /52 , y =layer_data(hdcrwld4)$count, color = "tlag 75", shape = "tlag 75"),size = 2.5)+
+  geom_point(aes  (layer_data(hdcrwld5)$x /52 , y =layer_data(hdcrwld5)$count, color = "tlag 100", shape = "tlag 100"), size = 2.5)+
+  scale_colour_manual(name="",values=cols, breaks = brk, labels = lab)+
+  scale_shape_manual(name="", values = shps, breaks = brk, labels = lab)+
+  scale_x_continuous(breaks =c(0,5,10,15,20,25,30,35),   limits =c(0,35))+
+  scale_y_continuous(limits =c(0,1000))+
+  labs(x = "Cumulative pathogen presence time per cell (years)", y="Frequency (cells)")+
+  ggtitle("(b) HDM")+
+      theme(
+            axis.title.x=element_text(size = 30),
+            axis.text.x=element_text(size = 30),
+            plot.title = element_text(size = 30),
+            axis.title.y=element_text(size = 30),
+            axis.text.y=element_text(size = 30),
+            legend.title = element_blank(),
+            legend.text = element_text( size = 20), 
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            legend.text.align = 0,
+            legend.background = element_rect(linetype = 1, size = 0.5, colour = 1),
+            legend.key.size = grid::unit(2, "lines")
+            )
+
+
+
+ld1<-ggplot()+geom_freqpoly(data = t5_df_nr_n,aes  (x=t5_df_nr_n$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+ld2<-ggplot()+geom_freqpoly(data = t5_df_nr_25,aes  (x=t5_df_nr_25$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+ld3<-ggplot()+geom_freqpoly(data = t5_df_nr_50,aes  (x=t5_df_nr_50$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+ld4<-ggplot()+geom_freqpoly(data = t5_df_nr_75,aes  (x=t5_df_nr_75$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+ld5<-ggplot()+geom_freqpoly(data = t5_df_nr_100,aes  (x=t5_df_nr_100$inf ),binwidth = 50,fill="grey", col="blue", size = 1)
+
+fp_nr<-ggplot()+
+  theme_bw()+
+  geom_path(aes  (layer_data(ld1)$x /52 , y =layer_data(ld1)$count), color = "#440154FF", size =1)+
+  geom_path(aes  (layer_data(ld3)$x /52 , y =layer_data(ld3)$count), color = "#3B528BFF",size = 1)+
+  geom_path(aes  (layer_data(ld5)$x /52 , y =layer_data(ld5)$count), color = "#21908CFF", size = 1)+
+  geom_path(aes  (layer_data(ld2)$x /52 , y =layer_data(ld2)$count), color = "#5DC863FF",size = 1)+
+  geom_path(aes  (layer_data(ld4)$x /52 , y =layer_data(ld4)$count), color = "#FDE725FF",size = 1)+
+  geom_point(aes  (layer_data(ld1)$x /52 , y =layer_data(ld1)$count), color = "#440154FF", size = 2.5, shape = 17)+
+  geom_point(aes  (layer_data(ld3)$x /52 , y =layer_data(ld3)$count), color = "#3B528BFF",size = 2.5, shape = 18)+
+  geom_point(aes  (layer_data(ld5)$x /52 , y =layer_data(ld5)$count), color = "#21908CFF", size = 2.5, shape = 15)+
+  geom_point(aes  (layer_data(ld2)$x /52 , y =layer_data(ld2)$count), color = "#5DC863FF",size = 2.5, shape = 25, fill = "#5DC863FF")+
+  geom_point(aes  (layer_data(ld4)$x /52 , y =layer_data(ld4)$count), color = "#FDE725FF",size = 2.5, shape = 16)+
+  scale_x_continuous(breaks =c(0,5,10,15,20,25,30,35),   limits =c(0,35))+
+  scale_y_continuous(  )+
+  ggtitle(expression("t"['lag']*" 0% "))+
+  labs(x = "Cumulative pathogen presence time per cell (years)", y="Frequency (cells)")+
+  ggtitle("(c) No roaming")+
+  theme(axis.title.x=element_text(size=30),
+          axis.text.x=element_text(size=30),
+          plot.title = element_text(size = 30),
+          axis.title.y=element_text(size=30),
+          axis.text.y=element_text(size=30),
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank()
+          
+  )
+
+
+all_fp<-ggarrange(fp_crw,fp_hdm, fp_nr, top = "", ncol = 1)
+
+
+all_fp_fn <- paste("Output/all_fp",currentDate_v,".eps",sep="")
+
+ggsave(all_fp_fn, plot = all_fp, dpi = 900, limitsize = T, scale = 1, width = 15, height = 20, device = "eps")
+
+```
+
+## Heatmaps
+
+```{r Heatmaps no roaming movement, echo=FALSE}
+
+nr0<-ggplot(data = t6_nr_n, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 0% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+
+nr25<-ggplot(data = t6_nr_25, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 25% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+nr50<-ggplot(data = t6_nr_50, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 50% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="bottom")
+
+nr75<-ggplot(data = t6_nr_75, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 75% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+nr100<-ggplot(data = t6_nr_100, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 100% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+
+nr_heatmaps<-ggarrange(nr0,nr25,nr50,nr75,nr100, ncol = 5, top = "Heatmaps no roaming movement")
+
+nr_heatmaps_fn <- paste("Output/nr_heatmaps",currentDate_v,".eps",sep="")
+
+ggsave(nr_heatmaps_fn, plot = nr_heatmaps, dpi = 900, limitsize = T, scale = 1, width = 20, height = 8, device = "eps")
+
+```
+
+
+
+
+```{r Heatmaps CRW, echo=FALSE}
+
+crw0<-ggplot(data = t6_crw_n, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 0% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+
+crw25<-ggplot(data = t6_crw_25, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 25% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+crw50<-ggplot(data = t6_crw_50, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 50% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="bottom")
+
+crw75<-ggplot(data = t6_crw_75, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 75% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+crw100<-ggplot(data = t6_crw_100, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 100% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+
+crw_heatmaps<-ggarrange(crw0,crw25,crw50,crw75,crw100, ncol = 5, top = "Heatmaps CRW")
+
+crw_heatmaps_fn <- paste("Output/crw_heatmaps",currentDate_v,".eps",sep="")
+
+ggsave(crw_heatmaps_fn, plot = crw_heatmaps, dpi = 900, limitsize = T, scale = 1, width = 20, height = 8, device = "eps")
+
+```
+
+```{r Heatmaps HDM, echo=FALSE}
+
+hdm0<-ggplot(data = t6_hd_crw_n, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 0% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+
+hdm25<-ggplot(data = t6_hd_crw_25, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 25% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+hdm50<-ggplot(data = t6_hd_crw_50, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 50% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="bottom")
+
+hdm75<-ggplot(data = t6_hd_crw_75, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 75% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+hdm100<-ggplot(data = t6_hd_crw_100, aes(xcord,ycord))+
+    geom_raster(aes(fill = (inf)))+
+    coord_equal()+
+    theme_bw()+
+    scale_fill_scico(palette = 'bilbao',direction = 1, name = "Infection cases", limits = c(0,1500))+
+    #scale_fill_viridis(name = "Infection cases", limits = c(0,1500))+
+    ggtitle(expression("t"['lag']*" 100% "))+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank(),
+          axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank(),
+          panel.grid = element_blank(),legend.position ="none")
+
+
+HDM_heatmaps<-ggarrange(hdm0,hdm25,hdm50,hdm75,hdm100, ncol = 5, top = "Heatmaps HDM")
+
+hdm_heatmaps_fn <- paste("Output/hdm_heatmaps",currentDate_v,".eps",sep="")
+
+ggsave(hdm_heatmaps_fn, plot = HDM_heatmaps, dpi = 900, limitsize = T, scale = 1, width = 20, height = 8, device = "eps")
+
+```
+
+# Version info
+
+```{r version}
+version
+sessionInfo()
+```
+
