@@ -1,5 +1,5 @@
 
-# Kürschner et al. 2021 *Ecology and Evolution*
+# Kürschner et al. (2021) *Ecology and Evolution*
 [![DOI](https://zenodo.org/badge/177115379.svg)](https://zenodo.org/badge/latestdoi/177115379)  
 
 > **Tobias Kürschner**, **Cédric Scherer**, **Viktoriia Radchuk**, Niels Blaum & **Stephanie Kramer-Schadt** (2021),
